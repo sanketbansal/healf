@@ -259,6 +259,133 @@ curl http://localhost:8000/api/v1/profile/test_user
 curl http://localhost:8000/ws/stats
 ```
 
+## 💬 Interactive Chat UI (Web Interface)
+
+### Real-Time Conversational Testing
+
+We've included a fully functional **chat interface** (`chat_ui.html`) that provides a beautiful web-based UI for testing the conversational wellness profiling experience. This interface connects directly to the WebSocket endpoint and demonstrates the complete user journey.
+
+#### **🎯 How to Use the Chat UI**
+
+1. **Start your development environment**:
+   ```bash
+   # Docker setup (recommended)
+   docker-compose -f docker-compose.development.yml up --build
+   
+   # OR local setup
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+2. **Open the chat interface**:
+   ```bash
+   # Open the chat UI in your browser
+   open chat_ui.html
+   
+   # OR navigate to:
+   file:///path/to/your/healf/chat_ui.html
+   ```
+
+3. **Start a conversation**:
+   - Click **"Start Chat"** to connect to the WebSocket
+   - The assistant will greet you and ask your first question
+   - Type natural responses like "hi", "I'm 28", "male", "active", etc.
+   - Watch your profile completion progress in real-time
+
+#### **🌟 Chat UI Features**
+
+- **🎨 Modern Interface**: Beautiful gradient design with connection status indicators
+- **⚡ Real-Time Communication**: Instant WebSocket messaging with typing indicators
+- **📊 Progress Tracking**: Visual profile completion percentage with progress bar
+- **🔄 Connection Management**: Connect/disconnect controls with status feedback
+- **💬 Natural Conversation**: Supports casual responses like "hi", "male", "active", "fitness"
+- **🤖 Intelligent Responses**: Fallback questions when OpenAI API key is not available
+- **📱 Responsive Design**: Works on desktop and mobile browsers
+
+#### **🗣️ Example Conversation Flow**
+
+```
+🤖 Healf Assistant: To get started, could you tell me your age? This helps us tailor recommendations for your life stage.
+
+👤 You: hi
+🤖 Healf Assistant: Hello! Nice to meet you. What's your age?
+
+👤 You: 28
+🤖 Healf Assistant: Great! I've noted your age. What gender do you identify as? This helps us provide more personalized wellness advice.
+
+👤 You: male  
+🤖 Healf Assistant: Great! I've noted your gender. How would you describe your current activity level? Are you more sedentary, moderately active, or very active?
+
+👤 You: active
+🤖 Healf Assistant: Great! I've noted your activity level. Do you follow any specific dietary preferences? For example, are you vegan, vegetarian, or have no specific preference?
+
+👤 You: vegan
+🤖 Healf Assistant: Great! I've noted your dietary preference. How would you rate your sleep quality overall? Would you say it's poor, average, or good?
+
+👤 You: good
+🤖 Healf Assistant: Great! I've noted your sleep quality. What's your current stress level like? Would you describe it as low, medium, or high?
+
+👤 You: low  
+🤖 Healf Assistant: Great! I've noted your stress level. What are your main health and wellness goals? What would you like to achieve or improve?
+
+👤 You: fitness
+🤖 Healf Assistant: 🎉 Congratulations! Your wellness profile is now complete! You're ready for personalized recommendations.
+
+📊 Profile Completion: 100%
+```
+
+#### **🔧 Technical Implementation**
+
+The chat UI demonstrates several key technical features:
+
+- **WebSocket Integration**: Direct connection to `/ws/{user_id}` endpoint
+- **Message Format Handling**: Supports both chat UI format (`user_message`) and structured format (`USER_ANSWER`)
+- **Intelligent Extraction**: Natural language processing to extract profile information from casual responses
+- **Fallback Logic**: When OpenAI API keys are not available, uses pre-written intelligent questions
+- **Error Handling**: Graceful handling of connection issues and malformed messages
+- **Progress Tracking**: Real-time calculation and display of profile completion percentage
+
+#### **🎨 Chat UI Technical Details**
+
+```html
+<!-- Key Features in chat_ui.html -->
+✅ WebSocket connection management
+✅ Real-time message exchange  
+✅ Progress bar with completion tracking
+✅ Connection status indicators
+✅ Responsive design with modern UI
+✅ Error handling and reconnection logic
+✅ Typing indicators and timestamps
+```
+
+#### **💡 Testing Scenarios**
+
+The chat UI is perfect for testing:
+
+1. **Natural Language Processing**: Try various ways of expressing the same information
+   - Age: "I'm 28", "28 years old", "twenty-eight"
+   - Activity: "I work out daily", "active", "I exercise regularly"
+   - Diet: "I'm vegan", "plant-based", "no meat or dairy"
+
+2. **Edge Cases**: Test how the system handles:
+   - Casual greetings: "hi", "hello", "hey there"
+   - Unclear responses: "not sure", "maybe", "idk"
+   - Multiple pieces of info: "I'm a 28-year-old active male"
+
+3. **Connection Resilience**: Test WebSocket stability:
+   - Disconnect and reconnect during conversation
+   - Close browser tab and reopen
+   - Network interruptions
+
+#### **🚀 Using for Demos**
+
+The chat UI is ideal for:
+- **Client Presentations**: Visual demonstration of the conversational flow
+- **User Testing**: Gather feedback on the user experience
+- **Development Testing**: Quick testing without writing WebSocket client code
+- **Feature Validation**: Verify new conversation logic and question flows
+
+**💡 Pro Tip**: Since the system uses intelligent fallback questions when no OpenAI API key is provided, the chat UI works perfectly for demos without requiring external API access!
+
 ## 🐳 Docker Setup (Production-Ready)
 
 ### Full Multi-Service Deployment

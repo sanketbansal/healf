@@ -41,9 +41,22 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             data = await websocket.receive_text()
             message = json.loads(data)
             
-            if message["type"] == "USER_ANSWER":
+            # Handle both chat UI format and structured format
+            if message.get("type") == "user_message" and "message" in message:
+                # Chat UI format
+                response = await process_chat_message(user_id, message["message"])
+                await websocket.send_text(json.dumps(response))
+            elif message.get("type") == "USER_ANSWER":
+                # Structured format
                 response = await process_user_answer(user_id, message["data"])
                 await websocket.send_text(json.dumps(response))
+            else:
+                # Unknown format, send error
+                await websocket.send_text(json.dumps({
+                    "type": "ERROR",
+                    "data": {"message": "Unknown message format"},
+                    "timestamp": datetime.utcnow().isoformat()
+                }))
                 
     except WebSocketDisconnect:
         await websocket_dao.disconnect_user(user_id)
@@ -55,6 +68,48 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             "timestamp": datetime.utcnow().isoformat()
         }))
         await websocket_dao.disconnect_user(user_id)
+
+async def process_chat_message(user_id: str, user_message: str):
+    """Process chat message from the UI"""
+    try:
+        # Get current profile
+        profile = await profile_service.get_or_create_profile(user_id)
+        
+        # Process the user's message through the question service
+        answer_response = await question_service.process_conversational_input(user_message, profile)
+        
+        # Update profile if we extracted information
+        if answer_response.get('profile_updates'):
+            profile = await profile_service.update_profile(user_id, answer_response['profile_updates'])
+            answer_response['profile'] = profile.model_dump()
+        
+        # Generate next question or completion message
+        if profile.completion_percentage >= 100:
+            return {
+                "type": "PROFILE_COMPLETE",
+                "data": {
+                    "message": "🎉 Congratulations! Your wellness profile is now complete! You're ready for personalized recommendations.",
+                    "profile": profile.model_dump()
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            next_question = await question_service.generate_next_question(profile)
+            return {
+                "type": "PROFILE_UPDATE",
+                "data": {
+                    "message": answer_response.get('message', next_question.get('message', 'Thank you for your response!')),
+                    "profile": profile.model_dump()
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+    
+    except Exception as e:
+        return {
+            "type": "ERROR",
+            "data": {"message": f"Error processing message: {str(e)}"},
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 async def process_user_answer(user_id: str, answer_data: dict):
     """Process user answer using the question service"""

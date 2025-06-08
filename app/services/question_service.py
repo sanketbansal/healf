@@ -42,10 +42,77 @@ class QuestionService:
         
         return {
             'type': 'question',
-            'question': question_data['question'],
+            'message': question_data['question'],
             'field': question_data['field'],
             'context': context
         }
+    
+    async def process_conversational_input(self, user_message: str, profile: UserProfile) -> Dict[str, Any]:
+        """Process conversational input from chat UI and extract profile information"""
+        
+        # Get missing fields to focus on
+        missing_fields = self._get_missing_fields(profile)
+        
+        if not missing_fields:
+            return {
+                'message': "Your profile is complete! Thanks for chatting with me.",
+                'profile_updates': {},
+                'extracted_fields': []
+            }
+        
+        # Try to extract information for the first missing field only
+        # This makes the conversation more natural and focused
+        primary_field = missing_fields[0]
+        extracted_value = self._extract_value_from_answer(user_message, primary_field)
+        
+        profile_updates = {}
+        if extracted_value is not None:
+            profile_updates[primary_field] = extracted_value
+        
+        # Generate appropriate response
+        if profile_updates:
+            field_name = list(profile_updates.keys())[0]
+            acknowledgment = f"Great! I've noted your {field_name.replace('_', ' ')}."
+            
+            # Get next missing field for follow-up question
+            remaining_fields = [f for f in missing_fields if f not in profile_updates]
+            if remaining_fields:
+                next_question = self._generate_simple_question(remaining_fields[0])
+                response_message = f"{acknowledgment} {next_question}"
+            else:
+                response_message = f"{acknowledgment} Your profile is now complete!"
+        else:
+            # No information extracted, handle appropriately
+            if user_message.lower().strip() in ['hi', 'hello', 'hey']:
+                # Greeting - respond naturally
+                response_message = f"Hello! Nice to meet you. {self._generate_simple_question(primary_field)}"
+            elif user_message.lower().strip() in ['ok', 'okay', 'yes']:
+                # Acknowledgment - continue with next question
+                response_message = self._generate_simple_question(primary_field)
+            else:
+                # Unclear response - ask for clarification
+                response_message = f"I didn't quite catch that. {self._generate_simple_question(primary_field)}"
+        
+        return {
+            'message': response_message,
+            'profile_updates': profile_updates,
+            'extracted_fields': list(profile_updates.keys())
+        }
+    
+    def _generate_simple_question(self, field: str) -> str:
+        """Generate a simple question for a specific field (fallback when LLM is not available)"""
+        
+        questions = {
+            'age': "What's your age?",
+            'gender': "How do you identify in terms of gender?",
+            'activity_level': "How would you describe your current activity level? (sedentary, moderate, or active)",
+            'dietary_preference': "Do you have any dietary preferences? (e.g., vegan, vegetarian, or no preference)",
+            'sleep_quality': "How would you rate your sleep quality? (poor, average, or good)",
+            'stress_level': "What's your current stress level? (low, medium, or high)",
+            'health_goals': "What are your main health and wellness goals?"
+        }
+        
+        return questions.get(field, "Could you tell me more about yourself?")
     
     def process_user_answer(self, user_answer: str, question_context: Dict[str, Any]) -> Dict[str, Any]:
         """Process user answer and extract structured data"""
@@ -88,6 +155,10 @@ class QuestionService:
         """Extract structured value from user answer based on field type"""
         answer_lower = answer.lower().strip()
         
+        # Don't extract from very short or casual responses
+        if len(answer.strip()) < 2 or answer_lower in ['hi', 'hello', 'hey', 'ok', 'okay', 'yes', 'no']:
+            return None
+        
         if field == 'age':
             # Extract age from answer
             import re
@@ -103,38 +174,48 @@ class QuestionService:
                 return 'sedentary'
             elif any(word in answer_lower for word in ['active', 'exercise', 'gym', 'sport', 'run', 'high']):
                 return 'active'
-            else:
+            elif any(word in answer_lower for word in ['moderate', 'medium', 'some', 'occasionally']):
                 return 'moderate'
+            return None
         
         elif field == 'dietary_preference':
             if any(word in answer_lower for word in ['vegan']):
                 return 'vegan'
             elif any(word in answer_lower for word in ['vegetarian']):
                 return 'vegetarian'
-            else:
+            elif any(word in answer_lower for word in ['no preference', 'omnivore', 'everything', 'anything']):
                 return 'no_preference'
+            return None
         
         elif field == 'sleep_quality':
             if any(word in answer_lower for word in ['poor', 'bad', 'terrible', 'awful']):
                 return 'poor'
             elif any(word in answer_lower for word in ['good', 'great', 'excellent', 'well']):
                 return 'good'
-            else:
+            elif any(word in answer_lower for word in ['average', 'okay', 'fair', 'decent']):
                 return 'average'
+            return None
         
         elif field == 'stress_level':
             if any(word in answer_lower for word in ['high', 'stressed', 'overwhelmed', 'anxious']):
                 return 'high'
             elif any(word in answer_lower for word in ['low', 'calm', 'relaxed', 'peaceful']):
                 return 'low'
-            else:
+            elif any(word in answer_lower for word in ['medium', 'moderate', 'normal', 'average']):
                 return 'medium'
+            return None
         
         elif field == 'gender':
-            return answer.strip()
+            # Only extract if the answer looks like a gender response
+            if any(word in answer_lower for word in ['male', 'female', 'man', 'woman', 'non-binary', 'other', 'prefer not to say']):
+                return answer.strip()
+            return None
         
         elif field == 'health_goals':
-            return answer.strip()
+            # Only extract if the answer is substantial and looks like health goals
+            if len(answer.strip()) >= 3 and any(word in answer_lower for word in ['lose', 'gain', 'weight', 'fitness', 'health', 'muscle', 'exercise', 'diet', 'wellness', 'goal', 'fit', 'strong', 'slim', 'tone', 'build', 'cardio', 'strength']):
+                return answer.strip()
+            return None
         
         else:
-            return answer.strip() 
+            return None 
