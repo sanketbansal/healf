@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# Environment files
+.env*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Database
+*.db
+dump.rdb
+
+# Logs
+*.log
+
+# Docker generated files (keep templates)
+docker-compose.*.yml
+Dockerfile.*
+!templates/
+
+# Temporary
+*.tmp 
