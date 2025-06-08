@@ -49,14 +49,9 @@ pip install -r requirements.txt
 
 ### Step 3: Choose Your Setup Method
 
-#### Option A: Local Development (Recommended for development)
+#### Option A: Docker Setup (Recommended for Development & Production)
 
-```bash
-# Start the application (uses development config by default)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-#### Option B: Docker Setup (Recommended for production-like testing)
+**⚠️ Important**: Our application requires MongoDB and Redis for full functionality. Docker provides these services automatically.
 
 ```bash
 # Generate Docker configuration
@@ -66,13 +61,60 @@ python scripts/generate_docker_config.py development
 docker-compose -f docker-compose.development.yml up --build
 ```
 
+#### Option B: Local Development (Testing Only - Limited Functionality)
+
+**⚠️ Note**: This setup is suitable for **testing only** as it lacks database services. The application will use fallback logic and won't persist data.
+
+**Prerequisites**: This requires manually setting up MongoDB and Redis if you want full functionality:
+
+```bash
+# Option B1: Manual database setup (if you want full functionality)
+# Install and start MongoDB (port 27017)
+# Install and start Redis (port 6379)
+
+# Option B2: Testing mode (fallback logic only)
+# Start the application (uses development config with fallback logic)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Limitations of Local Setup**:
+- ❌ No data persistence (profiles won't be saved)
+- ❌ No Redis caching (slower performance)  
+- ❌ Limited WebSocket session management
+- ✅ API endpoints work with fallback responses
+- ✅ LLM integration uses intelligent fallbacks
+- ✅ Testing and validation still functional
+
 ### Step 4: Verify It's Working
 
+#### For Docker Setup (Full Functionality):
 ```bash
 # Check health endpoint
 curl http://localhost:8000/health
 
 # Expected response: {"status":"healthy","service":"healf-api","version":"1.0.0"}
+
+# Test profile creation with persistence
+curl -X POST http://localhost:8000/api/v1/profile/init/test_user
+
+# Test profile retrieval (should work with data persistence)
+curl http://localhost:8000/api/v1/profile/test_user
+
+# View API documentation
+open http://localhost:8000/docs
+```
+
+#### For Local Setup (Testing Mode):
+```bash
+# Check health endpoint
+curl http://localhost:8000/health
+
+# Expected response: {"status":"healthy","service":"healf-api","version":"1.0.0"}
+
+# Test profile creation (will work but won't persist)
+curl -X POST http://localhost:8000/api/v1/profile/init/test_user
+
+# Note: Profile retrieval may fail or return fallback data without databases
 
 # View API documentation
 open http://localhost:8000/docs
