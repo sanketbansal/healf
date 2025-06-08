@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.{{ environment }}
+    ports:
+      - "{{ api_port }}:{{ api_port }}"
+    environment:
+      - ENVIRONMENT={{ environment }}
+      - DEBUG={{ debug }}
+      - LOG_LEVEL={{ log_level }}
+      - API_V1_STR={{ api_v1_str }}
+      - PROJECT_NAME={{ project_name }}
+      {% if openai_api_key -%}
+      - OPENAI_API_KEY={{ openai_api_key }}
+      {% endif -%}
+      - LLM_MODEL={{ llm_model }}
+      - LLM_TEMPERATURE={{ llm_temperature }}
+      - LLM_MAX_TOKENS={{ llm_max_tokens }}
+      - MAX_QUESTIONS={{ max_questions }}
+      - MIN_AGE={{ min_age }}
+      - MAX_AGE={{ max_age }}
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://mongo:27017/healf_{{ environment }}
+    {% if environment == 'development' -%}
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    {% endif -%}
+    depends_on:
+      - redis
+      - mongo
+    networks:
+      - healf-network
+    {% if environment == 'production' -%}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: {{ memory_limit }}
+          cpus: '{{ cpu_limit }}'
+      replicas: {{ workers }}
+    {% endif %}
+
+  redis:
+    image: redis:{{ redis_version }}-alpine
+    {% if environment == 'development' -%}
+    ports:
+      - "6379:6379"
+    {% endif -%}
+    volumes:
+      - redis-data:/data
+    networks:
+      - healf-network
+    {% if environment == 'production' -%}
+    restart: unless-stopped
+    {% if redis_password -%}
+    command: redis-server --appendonly yes --requirepass {{ redis_password }}
+    environment:
+      - REDIS_PASSWORD={{ redis_password }}
+    {% else -%}
+    command: redis-server --appendonly yes
+    {% endif -%}
+    {% endif %}
+
+  mongo:
+    image: mongo:{{ mongo_version }}
+    {% if environment == 'development' -%}
+    ports:
+      - "27017:27017"
+    {% endif -%}
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - healf-network
+    {% if environment == 'production' -%}
+    restart: unless-stopped
+    {% if mongo_password -%}
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD={{ mongo_password }}
+      - MONGO_INITDB_DATABASE=healf_{{ environment }}
+    {% endif -%}
+    {% endif %}
+
+volumes:
+  redis-data:
+  mongo-data:
+
+networks:
+  healf-network:
+    driver: bridge 
