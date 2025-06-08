@@ -5,13 +5,31 @@ WebSocket Data Access Object (DAO) using generic Redis DAO
 from typing import Dict, Any, Optional, Set, List
 from datetime import datetime, timezone, timedelta
 from fastapi import WebSocket
-from app.dao.redis_dao import get_redis_dao
+from app.config import settings
+
+# For testing, we'll use in-memory storage
+if getattr(settings, 'TESTING', False):
+    # Simple in-memory storage for testing
+    _test_sessions: Dict[str, Dict] = {}
+    _test_context: Dict[str, Dict] = {}
+    _test_stats: Dict[str, Any] = {
+        "active_connections": 0,
+        "total_connections": 0,
+        "peak_connections": 0,
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
 
 class WebSocketDAO:
     """WebSocket DAO using generic Redis DAO for session and state management"""
     
     def __init__(self):
-        self.redis_dao = get_redis_dao()
+        # Check if we're in testing mode
+        self.is_testing = getattr(settings, 'TESTING', False)
+        
+        if not self.is_testing:
+            from app.dao.redis_dao import get_redis_dao
+            self.redis_dao = get_redis_dao()
+            
         # In-memory connections (these can't be stored in Redis)
         self.active_connections: Dict[str, WebSocket] = {}
         
@@ -32,7 +50,7 @@ class WebSocketDAO:
         # Store connection in memory
         self.active_connections[user_id] = websocket
         
-        # Create session in Redis using generic DAO
+        # Create session data
         session_data = {
             "user_id": user_id,
             "connected_at": datetime.now(timezone.utc).isoformat(),
@@ -41,7 +59,13 @@ class WebSocketDAO:
             "session_state": "active"
         }
         
-        await self.redis_dao.session_create(user_id, session_data, ttl=3600)
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_sessions
+            _test_sessions[user_id] = session_data
+        else:
+            # Create session in Redis using generic DAO
+            await self.redis_dao.session_create(user_id, session_data, ttl=3600)
         
         # Update global stats
         await self._update_connection_stats(1)
@@ -52,18 +76,25 @@ class WebSocketDAO:
         if user_id in self.active_connections:
             del self.active_connections[user_id]
         
-        # Update session in Redis using generic DAO
-        session_data = await self.redis_dao.session_get(user_id)
-        if session_data:
-            session_data["disconnected_at"] = datetime.now(timezone.utc).isoformat()
-            session_data["session_state"] = "disconnected"
-            
-            # Store disconnected session for 24 hours for analytics
-            await self.redis_dao.set(
-                self._get_session_key(user_id), 
-                session_data, 
-                ttl=86400
-            )
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_sessions
+            if user_id in _test_sessions:
+                _test_sessions[user_id]["disconnected_at"] = datetime.now(timezone.utc).isoformat()
+                _test_sessions[user_id]["session_state"] = "disconnected"
+        else:
+            # Update session in Redis using generic DAO
+            session_data = await self.redis_dao.session_get(user_id)
+            if session_data:
+                session_data["disconnected_at"] = datetime.now(timezone.utc).isoformat()
+                session_data["session_state"] = "disconnected"
+                
+                # Store disconnected session for 24 hours for analytics
+                await self.redis_dao.set(
+                    self._get_session_key(user_id), 
+                    session_data, 
+                    ttl=86400
+                )
         
         # Update global stats
         await self._update_connection_stats(-1)
@@ -78,79 +109,125 @@ class WebSocketDAO:
     
     async def get_session_data(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get session data from Redis using generic DAO"""
-        return await self.redis_dao.session_get(user_id)
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_sessions
+            return _test_sessions.get(user_id)
+        else:
+            return await self.redis_dao.session_get(user_id)
     
     async def update_session_activity(self, user_id: str, message_type: str = None) -> None:
         """Update session activity and message count"""
-        session_data = await self.redis_dao.session_get(user_id)
-        if session_data:
-            # Update activity and message count
-            update_data = {
-                "last_activity": datetime.now(timezone.utc).isoformat(),
-                "message_count": session_data.get("message_count", 0) + 1
-            }
-            
-            # Track message types
-            if message_type:
-                message_types = session_data.get("message_types", {})
-                message_types[message_type] = message_types.get(message_type, 0) + 1
-                update_data["message_types"] = message_types
-            
-            await self.redis_dao.session_update(user_id, update_data, extend_ttl=True)
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_sessions
+            if user_id in _test_sessions:
+                session_data = _test_sessions[user_id]
+                # Update activity and message count
+                session_data["last_activity"] = datetime.now(timezone.utc).isoformat()
+                session_data["message_count"] = session_data.get("message_count", 0) + 1
+                
+                # Track message types
+                if message_type:
+                    message_types = session_data.get("message_types", {})
+                    message_types[message_type] = message_types.get(message_type, 0) + 1
+                    session_data["message_types"] = message_types
+        else:
+            session_data = await self.redis_dao.session_get(user_id)
+            if session_data:
+                # Update activity and message count
+                update_data = {
+                    "last_activity": datetime.now(timezone.utc).isoformat(),
+                    "message_count": session_data.get("message_count", 0) + 1
+                }
+                
+                # Track message types
+                if message_type:
+                    message_types = session_data.get("message_types", {})
+                    message_types[message_type] = message_types.get(message_type, 0) + 1
+                    update_data["message_types"] = message_types
+                
+                await self.redis_dao.session_update(user_id, update_data, extend_ttl=True)
     
     async def store_conversation_context(self, user_id: str, context: Dict[str, Any]) -> None:
         """Store conversation context in Redis using generic DAO"""
-        await self.redis_dao.set(
-            self._get_context_key(user_id), 
-            context, 
-            ttl=3600  # 1 hour TTL
-        )
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_context
+            _test_context[user_id] = context
+        else:
+            await self.redis_dao.set(
+                self._get_context_key(user_id), 
+                context, 
+                ttl=3600  # 1 hour TTL
+            )
     
     async def get_conversation_context(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get conversation context from Redis using generic DAO"""
-        return await self.redis_dao.get(self._get_context_key(user_id))
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_context
+            return _test_context.get(user_id)
+        else:
+            return await self.redis_dao.get(self._get_context_key(user_id))
     
     async def _update_connection_stats(self, delta: int) -> None:
         """Update global connection statistics using generic DAO"""
-        stats_key = self._get_stats_key()
-        
-        # Get current stats
-        stats = await self.redis_dao.get(stats_key)
-        if not stats:
-            stats = {
-                "active_connections": 0,
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_stats
+            _test_stats["active_connections"] = max(0, _test_stats["active_connections"] + delta)
+            if delta > 0:
+                _test_stats["total_connections"] += 1
+                _test_stats["peak_connections"] = max(_test_stats["peak_connections"], _test_stats["active_connections"])
+            _test_stats["last_updated"] = datetime.now(timezone.utc).isoformat()
+        else:
+            stats_key = self._get_stats_key()
+            
+            # Get current stats
+            stats = await self.redis_dao.get(stats_key)
+            if not stats:
+                stats = {
+                    "active_connections": 0,
+                    "total_connections": 0,
+                    "peak_connections": 0,
+                    "last_updated": datetime.now(timezone.utc).isoformat()
+                }
+            
+            # Update stats
+            stats["active_connections"] = max(0, stats["active_connections"] + delta)
+            if delta > 0:
+                stats["total_connections"] += 1
+                stats["peak_connections"] = max(stats["peak_connections"], stats["active_connections"])
+            stats["last_updated"] = datetime.now(timezone.utc).isoformat()
+            
+            # Store updated stats (no expiration for persistent stats)
+            await self.redis_dao.set(stats_key, stats)
+    
+    async def get_connection_statistics(self) -> Dict[str, Any]:
+        """Get WebSocket connection statistics using generic DAO"""
+        if self.is_testing:
+            # Use in-memory storage for testing
+            global _test_stats
+            stats = _test_stats.copy()
+            stats["current_in_memory"] = len(self.active_connections)
+            return stats
+        else:
+            stats_key = self._get_stats_key()
+            stats = await self.redis_dao.get(stats_key)
+            
+            if stats:
+                # Add current in-memory count for accuracy
+                stats["current_in_memory"] = len(self.active_connections)
+                return stats
+            
+            return {
+                "active_connections": len(self.active_connections),
+                "current_in_memory": len(self.active_connections),
                 "total_connections": 0,
                 "peak_connections": 0,
                 "last_updated": datetime.now(timezone.utc).isoformat()
             }
-        
-        # Update stats
-        stats["active_connections"] = max(0, stats["active_connections"] + delta)
-        if delta > 0:
-            stats["total_connections"] += 1
-            stats["peak_connections"] = max(stats["peak_connections"], stats["active_connections"])
-        stats["last_updated"] = datetime.now(timezone.utc).isoformat()
-        
-        # Store updated stats (no expiration for persistent stats)
-        await self.redis_dao.set(stats_key, stats)
-    
-    async def get_connection_statistics(self) -> Dict[str, Any]:
-        """Get WebSocket connection statistics using generic DAO"""
-        stats_key = self._get_stats_key()
-        stats = await self.redis_dao.get(stats_key)
-        
-        if stats:
-            # Add current in-memory count for accuracy
-            stats["current_in_memory"] = len(self.active_connections)
-            return stats
-        
-        return {
-            "active_connections": len(self.active_connections),
-            "current_in_memory": len(self.active_connections),
-            "total_connections": 0,
-            "peak_connections": 0,
-            "last_updated": datetime.now(timezone.utc).isoformat()
-        }
     
     async def get_active_user_ids(self) -> Set[str]:
         """Get set of currently active user IDs"""

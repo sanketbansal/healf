@@ -9,7 +9,7 @@ from app.models.user_profile import UserProfile
 from app.config import settings
 
 # For testing, we'll use in-memory storage
-if settings.TESTING if hasattr(settings, 'TESTING') else False:
+if getattr(settings, 'TESTING', False):
     # Simple in-memory storage for testing
     _test_profiles: Dict[str, Dict] = {}
     _test_cache: Dict[str, Dict] = {}
