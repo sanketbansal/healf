@@ -18,7 +18,9 @@ class DevelopmentConfig(BaseConfig):
     ]
     
     # LLM Configuration for development
-    OPENAI_API_KEY: str = ""  # Empty for demo - will use fallback logic
+    OPENAI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    LLM_PROVIDER: str = "gemini"  # Use Gemini since we have the API key
     LLM_TIMEOUT: int = 30
     
     # Redis Configuration (use environment variable if available, otherwise localhost)

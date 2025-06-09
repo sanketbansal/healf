@@ -5,7 +5,7 @@ from app.config.testing import TestingConfig
 
 def get_config():
     """Factory function to get configuration based on environment"""
-    env = os.getenv("ENVIRONMENT", "development").lower()
+    env = os.getenv("ENVIRONMENT", "testing").lower()
     
     config_mapping = {
         "development": DevelopmentConfig,

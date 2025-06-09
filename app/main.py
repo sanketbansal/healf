@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.api.routes import profile, websocket
+from app.api.routes import profile, websocket, llm
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -21,6 +21,7 @@ app.add_middleware(
 # Include routers
 app.include_router(profile.router)
 app.include_router(websocket.router)
+app.include_router(llm.router)
 
 @app.get("/")
 async def root():

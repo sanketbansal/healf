@@ -757,3 +757,60 @@ For questions and support:
 
 **Built with ❤️ for better wellness experiences**  
 *Fully tested and production-ready wellness profiling platform*
+
+## 🤖 LLM Integration
+
+### **Multi-Provider Support**
+
+The platform supports multiple LLM providers with automatic failover:
+
+- **OpenAI** (GPT-3.5-turbo, GPT-4)
+- **Google Gemini** (gemini-pro)
+- **Intelligent Fallback** - Pre-written questions when no providers are available
+
+### **Configuration**
+
+Set your API keys in environment variables or config files:
+
+```bash
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key
+LLM_MODEL=gpt-3.5-turbo
+
+# Gemini Configuration  
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-pro
+
+# Provider Selection (optional)
+LLM_PROVIDER=openai  # or "gemini"
+```
+
+### **Provider Status**
+
+Check which providers are available:
+
+```bash
+curl http://localhost:8000/health/llm
+```
+
+**Example Response:**
+```json
+{
+  "providers": [
+    {"name": "OpenAIProvider", "available": true},
+    {"name": "GeminiProvider", "available": false}
+  ],
+  "available_count": 1,
+  "total_count": 2,
+  "fallback_only": false
+}
+```
+
+### **Automatic Failover**
+
+The system automatically tries providers in order:
+1. **Primary Provider** (configured via `LLM_PROVIDER`)
+2. **Secondary Provider** (other available provider)
+3. **Intelligent Fallback** (pre-written questions)
+
+This ensures the conversation continues even if API services are unavailable.

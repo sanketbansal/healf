@@ -13,9 +13,14 @@ class BaseConfig(ABC):
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
     
     # LLM Configuration
-    LLM_MODEL: str = "gpt-4"
+    OPENAI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    LLM_PROVIDER: str = "openai"  # "openai" or "gemini"
+    LLM_MODEL: str = "gpt-3.5-turbo"
+    GEMINI_MODEL: str = "gemini-pro"
     LLM_TEMPERATURE: float = 0.7
-    LLM_MAX_TOKENS: int = 150
+    LLM_MAX_TOKENS: int = 1000
+    LLM_TIMEOUT: int = 30
     MAX_QUESTIONS: int = 5
     
     # WebSocket Configuration
