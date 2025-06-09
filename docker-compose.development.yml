@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile.development
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - API_V1_STR=/api/v1
+      - PROJECT_NAME=Healf Wellness Profiling Platform
+      - LLM_MODEL=gpt-3.5-turbo
+      - LLM_TEMPERATURE=0.7
+      - LLM_MAX_TOKENS=1000
+      - MAX_QUESTIONS=5
+      - MIN_AGE=13
+      - MAX_AGE=120
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://mongo:27017/healf_development
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    depends_on:
+      - redis
+      - mongo
+    networks:
+      - healf-network
+    
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - healf-network
+    
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - healf-network
+    
+
+volumes:
+  redis-data:
+  mongo-data:
+
+networks:
+  healf-network:
+    driver: bridge 
